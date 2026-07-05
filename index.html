@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>すくすく日記 〜子どもの成長日記〜</title>
+  <!-- スマホアプリ化（PWA）用 -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f5876e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="すくすく日記">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', 'Helvetica Neue', sans-serif;
+      min-height: 100vh;
+      color: #fff;
+      background: linear-gradient(160deg, #f5876e 0%, #f7a76c 30%, #f8c471 65%, #e8925e 100%);
+      padding: 24px 16px 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header { text-align: center; margin-bottom: 18px; }
+    header .icon { font-size: 56px; line-height: 1; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.2)); }
+    header h1 {
+      font-size: 24px; margin-top: 8px;
+      background: linear-gradient(90deg, #fff, #fff3b0);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    header p { font-size: 13px; color: rgba(255,255,255,0.92); margin-top: 6px; }
+
+    .topbar { width: 100%; max-width: 620px; display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px; }
+
+    .card {
+      width: 100%; max-width: 620px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(8px);
+    }
+    .card .label { font-size: 12px; color: rgba(255,255,255,0.8); letter-spacing: 1px; margin-bottom: 12px; }
+
+    .btn {
+      border: none; border-radius: 12px; color: #fff;
+      padding: 12px 20px; font-size: 15px; font-weight: bold; cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-cam   { background: linear-gradient(135deg, #f59e0b, #ef4444); }
+    .btn-pic   { background: linear-gradient(135deg, #f093fb, #f5576c); }
+    .btn-mic   { background: linear-gradient(135deg, #10b981, #059669); }
+    .btn-mic.rec { background: linear-gradient(135deg, #ef4444, #b91c1c); animation: pulse 1.2s infinite; }
+    .btn-rec   { background: linear-gradient(135deg, #ec4899, #be185d); }
+    .btn-rec.rec { background: linear-gradient(135deg, #ef4444, #b91c1c); animation: pulse 1.2s infinite; }
+    .btn-write { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .btn-save  { background: linear-gradient(135deg, #06b6d4, #3b82f6); }
+    .btn-ghost { background: rgba(255,255,255,0.18); font-weight: normal; font-size: 13px; padding: 8px 14px; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .status { font-size: 13px; color: rgba(255,255,255,0.92); }
+
+    textarea {
+      width: 100%; resize: vertical;
+      font-family: inherit; font-size: 15px; line-height: 1.8;
+      padding: 12px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(0,0,0,0.2); color: #fff;
+    }
+    textarea:focus { outline: 2px solid rgba(255,255,255,0.5); }
+    textarea#memo { min-height: 90px; margin-top: 12px; }
+    textarea#diary { min-height: 160px; margin-top: 12px; }
+    textarea::placeholder { color: rgba(255,255,255,0.5); }
+
+    #preview {
+      display: none; width: 100%; max-height: 280px; object-fit: contain;
+      margin-top: 14px; border-radius: 12px; background: rgba(0,0,0,0.2);
+    }
+    .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+    .check input { width: 18px; height: 18px; accent-color: #10b981; }
+
+    .hint { font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 8px; line-height: 1.6; }
+    .spin { display: inline-block; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* --- 日記一覧 --- */
+    .entry {
+      background: rgba(255,255,255,0.92); color: #4a3728;
+      border-radius: 14px; padding: 14px; margin-top: 12px;
+    }
+    .entry .e-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .entry .e-date { font-size: 13px; font-weight: bold; color: #e8734a; }
+    .entry img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; }
+    .entry .e-text { font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
+    .entry .e-btns { display: flex; gap: 8px; margin-top: 8px; }
+    .entry .e-btns button {
+      border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+      background: #f3e8dc; color: #7a5c44;
+    }
+    .empty { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 12px; }
+
+    /* --- モーダル共通 --- */
+    .modal {
+      display: none; position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,0.65); align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal.show { display: flex; }
+    .modal-box {
+      background: #fff; color: #333; border-radius: 24px; padding: 26px 22px;
+      max-width: 400px; width: 100%; text-align: center;
+      max-height: 88vh; overflow-y: auto;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+    }
+    .modal-box h2 { font-size: 18px; color: #e8734a; margin-bottom: 10px; }
+    .modal-box p { font-size: 13px; color: #555; line-height: 1.7; margin-bottom: 14px; }
+    .modal-box a { color: #2a7ac4; font-weight: bold; }
+    .api-steps {
+      text-align: left; background: #fff7f0; border: 1px solid #fbdfc8;
+      border-radius: 14px; padding: 14px 16px 14px 18px; margin: 0 0 14px;
+    }
+    .api-steps .ttl { font-size: 13px; font-weight: bold; color: #e8734a; margin-bottom: 8px; }
+    .api-steps ol { margin: 0; padding-left: 18px; }
+    .api-steps li { font-size: 13px; color: #444; line-height: 1.8; margin-bottom: 4px; }
+    .btn-open {
+      display: block; width: 100%; text-decoration: none; box-sizing: border-box;
+      background: linear-gradient(135deg, #4a90c4, #2a7ac4); color: #fff;
+      font-weight: bold; font-size: 15px; padding: 13px; border-radius: 12px; margin-bottom: 14px;
+    }
+    .modal-input {
+      width: 100%; padding: 12px 14px; border-radius: 12px;
+      border: 2.5px solid #f8c471; font-size: 14px;
+      outline: none; margin-bottom: 14px; font-family: inherit;
+    }
+    .modal-input:focus { border-color: #e8734a; }
+    .modal-input.mono { font-family: monospace; font-size: 13px; }
+    .modal-label { text-align: left; font-size: 12px; font-weight: bold; color: #a06a3e; margin-bottom: 4px; }
+    .modal-box .btn-ok   { background: linear-gradient(135deg, #f5876e, #e8734a); width: 100%; margin-bottom: 8px; }
+    .modal-box .btn-skip { background: #ddd; color: #555; width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <button class="btn btn-ghost" onclick="showChildModal()">👶 子どもの設定</button>
+    <button class="btn btn-ghost" onclick="showApiKeyModal()">🔑 APIキー設定</button>
+  </div>
+
+  <header>
+    <div class="icon">🌱</div>
+    <h1>すくすく日記</h1>
+    <p id="subTitle">写真と声から、AIが今日の成長日記を書いてくれます</p>
+  </header>
+
+  <!-- STEP 1: 今日の写真 -->
+  <div class="card">
+    <div class="label">STEP 1 ＿ 今日の一枚（なくてもOK）</div>
+    <div class="row">
+      <button class="btn btn-cam" onclick="document.getElementById('cam-input').click()">📷 写真をとる</button>
+      <button class="btn btn-pic" onclick="document.getElementById('pic-input').click()">🖼 写真を選ぶ</button>
+      <span class="status" id="photoStatus">今日の様子を1枚どうぞ</span>
+    </div>
+    <input type="file" id="cam-input" accept="image/*" capture="environment" style="display:none;" onchange="pickImage(this)">
+    <input type="file" id="pic-input" accept="image/*" style="display:none;" onchange="pickImage(this)">
+    <img id="preview" alt="今日の写真">
+    <label class="check">
+      <input type="checkbox" id="sendPhoto" checked>
+      写真をAIに見せて日記に活かす（外すと写真は保存だけ・AIには送りません）
+    </label>
+    <div class="hint">📌 写真はこの端末の中（ブラウザのデータベース）にだけ保存されます。チェックを入れた場合のみ、日記作成のためにGoogleのGeminiに送信されます。</div>
+  </div>
+
+  <!-- STEP 2: 今日のできごと -->
+  <div class="card">
+    <div class="label">STEP 2 ＿ 今日のできごとを話す・書く（なくてもOK）</div>
+    <div class="row">
+      <button class="btn btn-mic" id="micBtn" onclick="toggleMic()">🎤 話して入力</button>
+      <span class="status" id="micStatus">マイクで話すか、下に直接書いてね</span>
+    </div>
+    <textarea id="memo" placeholder="例：はじめて一人で靴をはけた。公園ですべり台を10回すべった。「ママみて！」と大きな声で呼んでくれた。"></textarea>
+    <div class="hint">📌 単語のメモだけでも大丈夫。AIがふくらませて日記にします。音声入力はAndroidのChromeがいちばん安定します（iPhoneは途中で切れることがあります）</div>
+
+    <div class="row" style="margin-top:16px;">
+      <button class="btn btn-rec" id="recBtn" onclick="toggleRec()">🎙 子どもの声をのこす</button>
+      <span class="status" id="recStatus">その日の声も、日記と一緒にのこせます</span>
+    </div>
+    <audio id="voicePreview" controls style="display:none; width:100%; margin-top:10px;"></audio>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn btn-ghost" id="voiceClear" onclick="clearVoice()" style="display:none;">❌ 声を取り消す</button>
+    </div>
+    <div class="hint">📌 「ママ！」のひと声だけでも、数年後には宝物。録音は最長3分で自動的に止まります（上の🎤音声入力とは同時に使えません）</div>
+  </div>
+
+  <!-- STEP 3: 日記を書いてもらう -->
+  <div class="card">
+    <div class="label">STEP 3 ＿ AIに日記を書いてもらう</div>
+    <div class="row">
+      <button class="btn btn-write" id="writeBtn" onclick="writeDiary()">✍️ 日記を書いてもらう</button>
+      <span class="status" id="writeStatus"></span>
+    </div>
+    <textarea id="diary" placeholder="ここにAIが書いた日記が出ます。自由に手直ししてから保存してね"></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-save" onclick="saveEntry()">💾 この日記を保存</button>
+      <button class="btn btn-ghost" onclick="copyDiary()">📋 コピー</button>
+    </div>
+    <div class="hint">📌 AIの文はあくまで下書き。表現を直してから保存すると、自分の言葉の日記になります</div>
+  </div>
+
+  <!-- 日記一覧 -->
+  <div class="card">
+    <div class="label">📖 これまでの日記</div>
+    <div id="entryList"></div>
+    <div class="empty" id="emptyMsg">まだ日記はありません。最初の1ページを書いてみよう！</div>
+    <div class="row" style="margin-top:16px;">
+      <button class="btn btn-ghost" onclick="exportBackup()">💾 バックアップを書き出す</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">📥 バックアップを読み込む</button>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none;" onchange="importBackup(this)">
+    </div>
+    <div class="hint">📌 日記は「この端末のこのブラウザの中」にだけ保存されます。ブラウザのデータを削除すると消えてしまうので、ときどき「バックアップを書き出す」でファイルに保存しておくと安心。別の端末への引っ越しにも使えます</div>
+  </div>
+
+  <!-- 子どもの設定モーダル -->
+  <div class="modal" id="childModal">
+    <div class="modal-box">
+      <h2>👶 お子さんのこと</h2>
+      <p>名前と誕生日を入れると、日記に「〇歳〇ヶ月」と自動で入ります。<br>この情報も<b>この端末の中にだけ</b>保存されます。</p>
+      <div class="modal-label">呼び名（例：はるくん、ももちゃん）</div>
+      <input class="modal-input" id="childName" type="text" placeholder="はるくん">
+      <div class="modal-label">誕生日</div>
+      <input class="modal-input" id="childBirth" type="date">
+      <button class="btn btn-ok" onclick="saveChild()">保存する</button>
+      <button class="btn btn-skip" onclick="closeModal('childModal')">あとで</button>
+    </div>
+  </div>
+
+  <!-- APIキー設定モーダル -->
+  <div class="modal" id="apiKeyModal">
+    <div class="modal-box">
+      <h2>🔑 Gemini APIキーを入れてね</h2>
+      <p>このアプリは、あなた自身の<b>無料のGemini APIキー</b>で動きます。<br>
+        キーは<b>あなたのスマホ・パソコンの中だけ</b>に保存され、外には送られません。</p>
+
+      <a class="btn-open" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">🔗 Google AI Studio を開く</a>
+
+      <div class="api-steps">
+        <div class="ttl">📖 APIキーの取りかた（無料・3分）</div>
+        <ol>
+          <li>上の「Google AI Studio を開く」を押す</li>
+          <li>Googleアカウントでログインする</li>
+          <li>「<b>+ Create API key</b>（APIキーを作成）」を押す</li>
+          <li>表示された「<b>AIza…</b>」で始まる文字を全部コピーする</li>
+          <li>下のらんに貼り付けて「この鍵で使う」を押す</li>
+        </ol>
+      </div>
+
+      <input id="apiKeyInput" class="modal-input mono" type="text" placeholder="AIza...（ここに貼り付け）">
+      <button class="btn btn-ok" onclick="saveApiKey()">この鍵で使う</button>
+      <button class="btn btn-skip" onclick="closeModal('apiKeyModal')">あとで</button>
+    </div>
+  </div>
+
+  <script>
+    // ===== Gemini（ブラウザから直接呼ぶ・キーはユーザーが入れる）=====
+    // 使えるモデルを上から順にためす（404=無い / 429=上限 なら自動で次へ）
+    var MODEL_CANDIDATES = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-flash-latest'];
+    var geminiKey = localStorage.getItem('geminiApiKey') || '';
+    var geminiModel = localStorage.getItem('geminiModel') || '';
+
+    function modelUrl(model) {
+      return 'https://generativelanguage.googleapis.com/v1beta/models/' + model
+        + ':generateContent?key=' + encodeURIComponent(geminiKey);
+    }
+
+    // 一時的なエラー（混雑・上限・モデル無し）は次のモデルや再挑戦で対応する
+    function isTransient(status) {
+      return status === 404 || status === 429 || status === 500 || status === 503;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function callGemini(bodyFactory) {
+      var list = MODEL_CANDIDATES.slice();
+      if (geminiModel) {
+        list = [geminiModel].concat(list.filter(function (m) { return m !== geminiModel; }));
+      }
+      var MAX_ROUNDS = 3;
+
+      function round(roundNum) {
+        var i = 0;
+        function attempt() {
+          var model = list[i];
+          return fetch(modelUrl(model), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyFactory())
+          }).then(function (res) {
+            if (res.ok) {
+              geminiModel = model;
+              localStorage.setItem('geminiModel', model);
+              return handleGemini(res);
+            }
+            if (isTransient(res.status) && i < list.length - 1) {
+              i++; return attempt();
+            }
+            if (res.status !== 404 && isTransient(res.status) && roundNum < MAX_ROUNDS) {
+              return wait(1500 * roundNum).then(function () { return round(roundNum + 1); });
+            }
+            return handleGemini(res);
+          });
+        }
+        return attempt();
+      }
+      return round(1);
+    }
+
+    function handleGemini(res) {
+      if (res.ok) {
+        return res.json().then(function (d) {
+          var t = d && d.candidates && d.candidates[0] && d.candidates[0].content
+            && d.candidates[0].content.parts && d.candidates[0].content.parts[0]
+            && d.candidates[0].content.parts[0].text;
+          return (t || '').trim();
+        });
+      }
+      return res.json().catch(function () { return null; }).then(function (d) {
+        var detail = (d && d.error && d.error.message) ? d.error.message : ('HTTP ' + res.status);
+        if (res.status === 400 || res.status === 403) {
+          throw new Error('APIキーの問題かも。右上「🔑 APIキー設定」を確認してね\n（詳細：' + detail + '）');
+        }
+        if (res.status === 429) {
+          throw new Error('Geminiの無料枠の上限みたい。1分ほど待つか、明日また試してね\n（詳細：' + detail + '）');
+        }
+        if (res.status === 500 || res.status === 503) {
+          throw new Error('Gemini側が今こんでいるみたい（' + res.status + '）。少し待って、もう一度ためしてね\n（詳細：' + detail + '）');
+        }
+        throw new Error('Geminiエラー（' + res.status + '）\n（詳細：' + detail + '）');
+      });
+    }
+
+    function showApiKeyModal() {
+      document.getElementById('apiKeyInput').value = geminiKey;
+      document.getElementById('apiKeyModal').classList.add('show');
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+    function saveApiKey() {
+      var val = document.getElementById('apiKeyInput').value.trim();
+      if (!val) { alert('APIキーを入力してね'); return; }
+      geminiKey = val;
+      localStorage.setItem('geminiApiKey', val);
+      closeModal('apiKeyModal');
+      document.getElementById('writeStatus').textContent = '✅ 鍵を保存したよ！';
+    }
+    function needKey() {
+      if (!geminiKey) { showApiKeyModal(); return true; }
+      return false;
+    }
+
+    // ===== 子どもの設定（名前・誕生日 → 月齢の自動計算）=====
+    var child = JSON.parse(localStorage.getItem('sukusukuChild') || '{}');
+
+    function showChildModal() {
+      document.getElementById('childName').value = child.name || '';
+      document.getElementById('childBirth').value = child.birth || '';
+      document.getElementById('childModal').classList.add('show');
+    }
+    function saveChild() {
+      child = {
+        name: document.getElementById('childName').value.trim(),
+        birth: document.getElementById('childBirth').value
+      };
+      localStorage.setItem('sukusukuChild', JSON.stringify(child));
+      closeModal('childModal');
+      updateSubTitle();
+    }
+    // 「2歳3ヶ月」のような表記を作る
+    function ageText(onDate) {
+      if (!child.birth) return '';
+      var b = new Date(child.birth);
+      var d = onDate || new Date();
+      var months = (d.getFullYear() - b.getFullYear()) * 12 + (d.getMonth() - b.getMonth());
+      if (d.getDate() < b.getDate()) months--;
+      if (months < 0) return '';
+      var y = Math.floor(months / 12), m = months % 12;
+      if (y === 0) return '生後' + months + 'ヶ月';
+      return y + '歳' + m + 'ヶ月';
+    }
+    function updateSubTitle() {
+      var el = document.getElementById('subTitle');
+      if (child.name) {
+        var a = ageText();
+        el.textContent = child.name + (a ? '（' + a + '）' : '') + 'の成長を、AIと一緒に記録しよう';
+      }
+    }
+
+    // ===== 写真を選ぶ → 小さくしてプレビュー =====
+    var photoData = ''; // 縮小後のJPEG（dataURL）
+
+    function pickImage(input) {
+      var file = input.files[0];
+      if (!file) return;
+      input.value = '';
+      var reader = new FileReader();
+      reader.onload = function (e) { shrinkPhoto(e.target.result); };
+      reader.readAsDataURL(file);
+    }
+
+    function shrinkPhoto(dataUrl) {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1280;
+        var w = img.width, h = img.height;
+        if (w > max || h > max) {
+          if (w >= h) { h = Math.round(h * max / w); w = max; }
+          else { w = Math.round(w * max / h); h = max; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        photoData = canvas.toDataURL('image/jpeg', 0.8);
+        var pv = document.getElementById('preview');
+        pv.src = photoData; pv.style.display = 'block';
+        document.getElementById('photoStatus').textContent = '✅ 写真OK！';
+      };
+      img.src = dataUrl;
+    }
+
+    // ===== 音声入力（Web Speech API）=====
+    var recognition = null;
+    var listening = false;
+
+    function toggleMic() {
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        alert('このブラウザは音声入力に対応していません。AndroidのChromeか、下のらんに直接書いてね');
+        return;
+      }
+      if (listening) { recognition.stop(); return; }
+
+      recognition = new SR();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+
+      recognition.onstart = function () {
+        listening = true;
+        document.getElementById('micBtn').classList.add('rec');
+        document.getElementById('micBtn').textContent = '⏹ 止める';
+        document.getElementById('micStatus').textContent = '🎙 聞いています…話してね';
+      };
+      recognition.onresult = function (e) {
+        var memo = document.getElementById('memo');
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            var t = e.results[i][0].transcript.trim();
+            if (t) memo.value = (memo.value ? memo.value + '\n' : '') + t;
+          }
+        }
+      };
+      recognition.onerror = function (e) {
+        if (e.error === 'not-allowed') {
+          document.getElementById('micStatus').textContent = '😅 マイクの使用が許可されていません';
+        }
+      };
+      recognition.onend = function () {
+        listening = false;
+        document.getElementById('micBtn').classList.remove('rec');
+        document.getElementById('micBtn').textContent = '🎤 話して入力';
+        document.getElementById('micStatus').textContent = '✅ 入力おわり。続きを話すならもう一度押してね';
+      };
+      recognition.start();
+    }
+
+    // ===== 子どもの声の録音（MediaRecorder）=====
+    var mediaRecorder = null, recChunks = [], voiceData = '', recTimer = null;
+
+    function toggleRec() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        return;
+      }
+      if (listening) { alert('🎤音声入力の途中です。先に「⏹ 止める」を押してね'); return; }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+        alert('このブラウザは録音に対応していません');
+        return;
+      }
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+        recChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
+        mediaRecorder.onstop = function () {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          clearTimeout(recTimer);
+          var btn = document.getElementById('recBtn');
+          btn.classList.remove('rec');
+          btn.textContent = '🎙 子どもの声をのこす';
+          var blob = new Blob(recChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            voiceData = e.target.result;
+            var pv = document.getElementById('voicePreview');
+            pv.src = voiceData; pv.style.display = 'block';
+            document.getElementById('voiceClear').style.display = 'inline-block';
+            document.getElementById('recStatus').textContent = '✅ 録音できたよ！▶で聞いてみてね';
+          };
+          reader.readAsDataURL(blob);
+        };
+        mediaRecorder.start();
+        var btn = document.getElementById('recBtn');
+        btn.classList.add('rec');
+        btn.textContent = '⏹ 録音を止める';
+        document.getElementById('recStatus').textContent = '🔴 録音中…子どもの声を聞かせてね';
+        // 容量を守るため最長3分で自動停止
+        recTimer = setTimeout(function () {
+          if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+        }, 180000);
+      }).catch(function () {
+        document.getElementById('recStatus').textContent = '😅 マイクの使用が許可されていません';
+      });
+    }
+
+    function clearVoice() {
+      voiceData = '';
+      var pv = document.getElementById('voicePreview');
+      pv.pause(); pv.removeAttribute('src'); pv.style.display = 'none';
+      document.getElementById('voiceClear').style.display = 'none';
+      document.getElementById('recStatus').textContent = 'その日の声も、日記と一緒にのこせます';
+    }
+
+    // ===== 日記を書いてもらう =====
+    function diaryPrompt(dateStr) {
+      var who = child.name || 'わが子';
+      var a = ageText();
+      var memo = document.getElementById('memo').value.trim();
+      var p = 'あなたは子育て日記を代筆するライターです。親の目線で、今日の子どもの成長日記を日本語で書いてください。\n'
+        + '【子ども】' + who + (a ? '（' + a + '）' : '') + '\n'
+        + '【日付】' + dateStr + '\n'
+        + (memo ? '【今日のできごとメモ】\n' + memo + '\n' : '')
+        + '【書き方のルール】\n'
+        + '・150〜250字程度。あたたかく、少しユーモアのある自然な文体（です・ます調は使わず、日記らしい常体）。\n'
+        + '・メモや写真に写っていることだけを使う。事実のでっち上げはしない。\n'
+        + '・写真がある場合は、写っている様子（表情・しぐさ・場所）を1〜2文で織り込む。\n'
+        + '・最後に、成長を感じた一言か、子どもへの短いメッセージで締める。\n'
+        + '・前置き・タイトル・マークダウン記号は付けず、日記の本文だけを返す。';
+      return p;
+    }
+
+    function writeDiary() {
+      if (needKey()) return;
+      var memo = document.getElementById('memo').value.trim();
+      var usePhoto = document.getElementById('sendPhoto').checked && photoData;
+      if (!memo && !usePhoto) {
+        alert('写真をとるか、今日のできごとをひとこと入れてね');
+        return;
+      }
+      var btn = document.getElementById('writeBtn');
+      var st = document.getElementById('writeStatus');
+      btn.disabled = true;
+      st.innerHTML = '<span class="spin">✏️</span> 日記を書いています…';
+
+      var today = new Date();
+      var dateStr = today.getFullYear() + '年' + (today.getMonth() + 1) + '月' + today.getDate() + '日';
+
+      var promise;
+      if (usePhoto) {
+        var mime = photoData.substring(5, photoData.indexOf(';'));
+        var b64 = photoData.substring(photoData.indexOf(',') + 1);
+        promise = callGemini(function () {
+          return {
+            contents: [{ parts: [
+              { text: diaryPrompt(dateStr) },
+              { inline_data: { mime_type: mime, data: b64 } }
+            ] }],
+            generationConfig: { temperature: 0.8, maxOutputTokens: 1024 }
+          };
+        });
+      } else {
+        promise = callGemini(function () {
+          return {
+            contents: [{ parts: [{ text: diaryPrompt(dateStr) }] }],
+            generationConfig: { temperature: 0.8, maxOutputTokens: 1024 }
+          };
+        });
+      }
+
+      promise
+        .then(function (text) {
+          document.getElementById('diary').value = text || '';
+          st.textContent = text ? '✅ できたよ！手直しして保存してね' : '😅 うまく書けませんでした';
+        })
+        .catch(function (err) { st.textContent = '😅 ' + err.message; })
+        .then(function () { btn.disabled = false; });
+    }
+
+    function copyDiary() {
+      var t = document.getElementById('diary').value;
+      if (!t) { alert('まだ日記がありません'); return; }
+      navigator.clipboard.writeText(t).then(function () { alert('コピーしました！'); });
+    }
+
+    // ===== IndexedDB（写真つき日記の保存）=====
+    // localStorageは5MB程度しか無いので、写真はIndexedDBに保存する
+    var DB_NAME = 'sukusukuDiary', DB_VER = 1, db = null;
+
+    function openDb() {
+      return new Promise(function (resolve, reject) {
+        if (db) { resolve(db); return; }
+        var req = indexedDB.open(DB_NAME, DB_VER);
+        req.onupgradeneeded = function (e) {
+          var d = e.target.result;
+          if (!d.objectStoreNames.contains('entries')) {
+            d.createObjectStore('entries', { keyPath: 'id', autoIncrement: true });
+          }
+        };
+        req.onsuccess = function (e) { db = e.target.result; resolve(db); };
+        req.onerror = function () { reject(new Error('データベースを開けませんでした')); };
+      });
+    }
+
+    function saveEntry() {
+      var text = document.getElementById('diary').value.trim();
+      if (!text) { alert('保存する日記がありません。先に「✍️ 日記を書いてもらう」を押すか、直接書いてね'); return; }
+      var entry = {
+        date: new Date().toISOString(),
+        age: ageText(),
+        memo: document.getElementById('memo').value.trim(),
+        photo: photoData || '',
+        voice: voiceData || '',
+        text: text
+      };
+      openDb().then(function (d) {
+        var tx = d.transaction('entries', 'readwrite');
+        tx.objectStore('entries').add(entry);
+        tx.oncomplete = function () {
+          // 次のページのために入力をリセット
+          photoData = '';
+          document.getElementById('preview').style.display = 'none';
+          document.getElementById('memo').value = '';
+          document.getElementById('diary').value = '';
+          document.getElementById('photoStatus').textContent = '今日の様子を1枚どうぞ';
+          document.getElementById('writeStatus').textContent = '📖 保存しました！';
+          clearVoice();
+          loadEntries();
+        };
+        tx.onerror = function () { alert('保存に失敗しました。端末の空き容量を確認してね'); };
+      }).catch(function (err) { alert(err.message); });
+    }
+
+    function loadEntries() {
+      openDb().then(function (d) {
+        var tx = d.transaction('entries', 'readonly');
+        var req = tx.objectStore('entries').getAll();
+        req.onsuccess = function () {
+          var list = req.result || [];
+          list.sort(function (a, b) { return b.date.localeCompare(a.date); }); // 新しい順
+          renderEntries(list);
+        };
+      });
+    }
+
+    function renderEntries(list) {
+      var box = document.getElementById('entryList');
+      var empty = document.getElementById('emptyMsg');
+      box.innerHTML = '';
+      empty.style.display = list.length ? 'none' : 'block';
+      list.forEach(function (en) {
+        var d = new Date(en.date);
+        var dateStr = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+        var div = document.createElement('div');
+        div.className = 'entry';
+
+        var head = document.createElement('div');
+        head.className = 'e-head';
+        var dt = document.createElement('span');
+        dt.className = 'e-date';
+        dt.textContent = '📅 ' + dateStr + (en.age ? '（' + en.age + '）' : '');
+        head.appendChild(dt);
+        div.appendChild(head);
+
+        if (en.photo) {
+          var img = document.createElement('img');
+          img.src = en.photo; img.alt = '';
+          div.appendChild(img);
+        }
+        if (en.voice) {
+          var au = document.createElement('audio');
+          au.controls = true; au.src = en.voice;
+          au.style.width = '100%'; au.style.marginBottom = '8px';
+          div.appendChild(au);
+        }
+        var tx = document.createElement('div');
+        tx.className = 'e-text';
+        tx.textContent = en.text;
+        div.appendChild(tx);
+
+        var btns = document.createElement('div');
+        btns.className = 'e-btns';
+        var cp = document.createElement('button');
+        cp.textContent = '📋 コピー';
+        cp.onclick = function () {
+          navigator.clipboard.writeText(dateStr + '\n' + en.text).then(function () { alert('コピーしました！'); });
+        };
+        var del = document.createElement('button');
+        del.textContent = '🗑 削除';
+        del.onclick = function () {
+          if (!confirm(dateStr + ' の日記を削除する？（元に戻せません）')) return;
+          openDb().then(function (d2) {
+            var t2 = d2.transaction('entries', 'readwrite');
+            t2.objectStore('entries').delete(en.id);
+            t2.oncomplete = loadEntries;
+          });
+        };
+        btns.appendChild(cp);
+        btns.appendChild(del);
+        div.appendChild(btns);
+        box.appendChild(div);
+      });
+    }
+
+    // ===== バックアップ（書き出し・読み込み）=====
+    // 日記は端末のブラウザ内にしか無いので、ファイルに書き出せば消失対策＆引っ越しができる
+    function exportBackup() {
+      openDb().then(function (d) {
+        var req = d.transaction('entries', 'readonly').objectStore('entries').getAll();
+        req.onsuccess = function () {
+          var list = req.result || [];
+          if (!list.length) { alert('まだ日記がないので、書き出すものがありません'); return; }
+          var data = { app: 'sukusuku-nikki', version: 1, child: child, entries: list };
+          var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+          var a = document.createElement('a');
+          var today = new Date();
+          a.href = URL.createObjectURL(blob);
+          a.download = 'すくすく日記バックアップ_' + today.getFullYear() + '-'
+            + String(today.getMonth() + 1).padStart(2, '0') + '-'
+            + String(today.getDate()).padStart(2, '0') + '.json';
+          a.click();
+          URL.revokeObjectURL(a.href);
+          alert('📦 ' + list.length + '件の日記を書き出しました！\nファイルはダウンロードフォルダに入ります。大切に保管してね');
+        };
+      }).catch(function (err) { alert(err.message); });
+    }
+
+    function importBackup(input) {
+      var file = input.files[0];
+      if (!file) return;
+      input.value = '';
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var data;
+        try { data = JSON.parse(e.target.result); } catch (err) { data = null; }
+        if (!data || data.app !== 'sukusuku-nikki' || !Array.isArray(data.entries)) {
+          alert('😅 このファイルは、すくすく日記のバックアップではないみたい');
+          return;
+        }
+        if (!confirm(data.entries.length + '件の日記を読み込みます。今ある日記に追加されます。よい？')) return;
+        openDb().then(function (d) {
+          var tx = d.transaction('entries', 'readwrite');
+          var store = tx.objectStore('entries');
+          data.entries.forEach(function (en) {
+            delete en.id; // 番号は読み込み先で新しく振り直す（上書き事故を防ぐ）
+            store.add(en);
+          });
+          tx.oncomplete = function () {
+            // 子どもの設定が未入力なら、バックアップの設定も復元する
+            if (!child.name && !child.birth && data.child && (data.child.name || data.child.birth)) {
+              child = data.child;
+              localStorage.setItem('sukusukuChild', JSON.stringify(child));
+              updateSubTitle();
+            }
+            loadEntries();
+            alert('📖 ' + data.entries.length + '件の日記を読み込みました！');
+          };
+          tx.onerror = function () { alert('読み込みに失敗しました。端末の空き容量を確認してね'); };
+        }).catch(function (err) { alert(err.message); });
+      };
+      reader.readAsText(file);
+    }
+
+    // ===== 起動時 =====
+    updateSubTitle();
+    loadEntries();
+    if (!geminiKey) { showApiKeyModal(); }
+    else if (!child.name && !child.birth) { showChildModal(); }
+
+    // ===== スマホアプリ化（Service Worker登録）=====
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js');
+      });
+    }
+  </script>
+</body>
+</html>
