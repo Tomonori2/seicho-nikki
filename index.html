@@ -107,6 +107,29 @@
     }
     .empty { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 12px; }
 
+    .month-head {
+      display: block; width: 100%; text-align: left; border: none; cursor: pointer;
+      margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(255,255,255,0.18); color: #fff; font-size: 14px; font-weight: bold;
+    }
+    .month-head:active { transform: scale(0.99); }
+
+    .backup-warn {
+      display: none; background: rgba(255,241,118,0.22); border: 1px solid rgba(255,241,118,0.55);
+      border-radius: 10px; padding: 10px 12px; font-size: 12px; margin-top: 12px; line-height: 1.6;
+    }
+
+    input.date-input {
+      font-family: inherit; font-size: 14px; padding: 8px 10px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.2); color: #fff;
+    }
+    input.date-input::-webkit-calendar-picker-indicator { filter: invert(1); }
+
+    .entry textarea.e-edit {
+      background: #fff; color: #4a3728; border: 1px solid #e8c9a8;
+      min-height: 120px; margin-top: 0;
+    }
+
     /* --- モーダル共通 --- */
     .modal {
       display: none; position: fixed; inset: 0; z-index: 300;
@@ -200,6 +223,11 @@
   <!-- STEP 3: 日記を書いてもらう -->
   <div class="card">
     <div class="label">STEP 3 ＿ AIに日記を書いてもらう</div>
+    <div class="row" style="margin-bottom:12px;">
+      <span class="status">📅 日記の日付：</span>
+      <input type="date" id="entryDate" class="date-input">
+      <span class="status" style="font-size:11px;">書き忘れた日はここを変えてね</span>
+    </div>
     <div class="row">
       <button class="btn btn-write" id="writeBtn" onclick="writeDiary()">✍️ 日記を書いてもらう</button>
       <span class="status" id="writeStatus"></span>
@@ -217,6 +245,7 @@
     <div class="label">📖 これまでの日記</div>
     <div id="entryList"></div>
     <div class="empty" id="emptyMsg">まだ日記はありません。最初の1ページを書いてみよう！</div>
+    <div class="backup-warn" id="backupWarn"></div>
     <div class="row" style="margin-top:16px;">
       <button class="btn btn-ghost" onclick="exportBackup()">💾 バックアップを書き出す</button>
       <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">📥 バックアップを読み込む</button>
@@ -397,6 +426,18 @@
       }
     }
 
+    // ===== 日記の日付（書き忘れた日をあとから書けるように）=====
+    function todayStr() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function selectedDate() {
+      var v = document.getElementById('entryDate').value;
+      if (!v || v === todayStr()) return new Date(); // 今日ならいまの時刻（新しい順の並びが自然になる）
+      return new Date(v + 'T12:00:00'); // 過去の日付はお昼の時刻で記録
+    }
+    function resetEntryDate() { document.getElementById('entryDate').value = todayStr(); }
+
     // ===== 写真を選ぶ → 小さくしてプレビュー =====
     var photoData = ''; // 縮小後のJPEG（dataURL）
 
@@ -534,7 +575,7 @@
     // ===== 日記を書いてもらう =====
     function diaryPrompt(dateStr) {
       var who = child.name || 'わが子';
-      var a = ageText();
+      var a = ageText(selectedDate()); // 月齢は日記の日付で計算する
       var memo = document.getElementById('memo').value.trim();
       var p = 'あなたは子育て日記を代筆するライターです。親の目線で、今日の子どもの成長日記を日本語で書いてください。\n'
         + '【子ども】' + who + (a ? '（' + a + '）' : '') + '\n'
@@ -562,7 +603,7 @@
       btn.disabled = true;
       st.innerHTML = '<span class="spin">✏️</span> 日記を書いています…';
 
-      var today = new Date();
+      var today = selectedDate();
       var dateStr = today.getFullYear() + '年' + (today.getMonth() + 1) + '月' + today.getDate() + '日';
 
       var promise;
@@ -625,8 +666,8 @@
       var text = document.getElementById('diary').value.trim();
       if (!text) { alert('保存する日記がありません。先に「✍️ 日記を書いてもらう」を押すか、直接書いてね'); return; }
       var entry = {
-        date: new Date().toISOString(),
-        age: ageText(),
+        date: selectedDate().toISOString(),
+        age: ageText(selectedDate()),
         memo: document.getElementById('memo').value.trim(),
         photo: photoData || '',
         voice: voiceData || '',
@@ -643,6 +684,7 @@
           document.getElementById('diary').value = '';
           document.getElementById('photoStatus').textContent = '今日の様子を1枚どうぞ';
           document.getElementById('writeStatus').textContent = '📖 保存しました！';
+          resetEntryDate();
           clearVoice();
           loadEntries();
         };
@@ -667,58 +709,147 @@
       var empty = document.getElementById('emptyMsg');
       box.innerHTML = '';
       empty.style.display = list.length ? 'none' : 'block';
+      updateBackupWarn(list.length);
+
+      // 月ごとにまとめる（新しい月が上・いちばん新しい月だけ開いておく）
+      var groups = [], map = {};
       list.forEach(function (en) {
         var d = new Date(en.date);
-        var dateStr = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
-        var div = document.createElement('div');
-        div.className = 'entry';
-
-        var head = document.createElement('div');
-        head.className = 'e-head';
-        var dt = document.createElement('span');
-        dt.className = 'e-date';
-        dt.textContent = '📅 ' + dateStr + (en.age ? '（' + en.age + '）' : '');
-        head.appendChild(dt);
-        div.appendChild(head);
-
-        if (en.photo) {
-          var img = document.createElement('img');
-          img.src = en.photo; img.alt = '';
-          div.appendChild(img);
-        }
-        if (en.voice) {
-          var au = document.createElement('audio');
-          au.controls = true; au.src = en.voice;
-          au.style.width = '100%'; au.style.marginBottom = '8px';
-          div.appendChild(au);
-        }
-        var tx = document.createElement('div');
-        tx.className = 'e-text';
-        tx.textContent = en.text;
-        div.appendChild(tx);
-
-        var btns = document.createElement('div');
-        btns.className = 'e-btns';
-        var cp = document.createElement('button');
-        cp.textContent = '📋 コピー';
-        cp.onclick = function () {
-          navigator.clipboard.writeText(dateStr + '\n' + en.text).then(function () { alert('コピーしました！'); });
-        };
-        var del = document.createElement('button');
-        del.textContent = '🗑 削除';
-        del.onclick = function () {
-          if (!confirm(dateStr + ' の日記を削除する？（元に戻せません）')) return;
-          openDb().then(function (d2) {
-            var t2 = d2.transaction('entries', 'readwrite');
-            t2.objectStore('entries').delete(en.id);
-            t2.oncomplete = loadEntries;
-          });
-        };
-        btns.appendChild(cp);
-        btns.appendChild(del);
-        div.appendChild(btns);
-        box.appendChild(div);
+        var key = d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+        if (!map[key]) { map[key] = { key: key, items: [] }; groups.push(map[key]); }
+        map[key].items.push(en);
       });
+
+      groups.forEach(function (g, gi) {
+        var open = gi === 0;
+        var head = document.createElement('button');
+        head.className = 'month-head';
+        var body = document.createElement('div');
+        body.style.display = open ? 'block' : 'none';
+        function setLabel() {
+          head.textContent = (body.style.display === 'none' ? '📁 ' : '📂 ') + g.key + '（' + g.items.length + '件）';
+        }
+        setLabel();
+        head.onclick = function () {
+          body.style.display = (body.style.display === 'none') ? 'block' : 'none';
+          setLabel();
+        };
+        g.items.forEach(function (en) { body.appendChild(buildEntryCard(en)); });
+        box.appendChild(head);
+        box.appendChild(body);
+      });
+    }
+
+    function buildEntryCard(en) {
+      var d = new Date(en.date);
+      var dateStr = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+      var div = document.createElement('div');
+      div.className = 'entry';
+
+      var head = document.createElement('div');
+      head.className = 'e-head';
+      var dt = document.createElement('span');
+      dt.className = 'e-date';
+      dt.textContent = '📅 ' + dateStr + (en.age ? '（' + en.age + '）' : '');
+      head.appendChild(dt);
+      div.appendChild(head);
+
+      if (en.photo) {
+        var img = document.createElement('img');
+        img.src = en.photo; img.alt = '';
+        div.appendChild(img);
+      }
+      if (en.voice) {
+        var au = document.createElement('audio');
+        au.controls = true; au.src = en.voice;
+        au.style.width = '100%'; au.style.marginBottom = '8px';
+        div.appendChild(au);
+      }
+      var tx = document.createElement('div');
+      tx.className = 'e-text';
+      tx.textContent = en.text;
+      div.appendChild(tx);
+
+      var btns = document.createElement('div');
+      btns.className = 'e-btns';
+      var ed = document.createElement('button');
+      ed.textContent = '✏️ 編集';
+      ed.onclick = function () { startEdit(div, en); };
+      var cp = document.createElement('button');
+      cp.textContent = '📋 コピー';
+      cp.onclick = function () {
+        navigator.clipboard.writeText(dateStr + '\n' + en.text).then(function () { alert('コピーしました！'); });
+      };
+      var del = document.createElement('button');
+      del.textContent = '🗑 削除';
+      del.onclick = function () {
+        if (!confirm(dateStr + ' の日記を削除する？（元に戻せません）')) return;
+        openDb().then(function (d2) {
+          var t2 = d2.transaction('entries', 'readwrite');
+          t2.objectStore('entries').delete(en.id);
+          t2.oncomplete = loadEntries;
+        });
+      };
+      btns.appendChild(ed);
+      btns.appendChild(cp);
+      btns.appendChild(del);
+      div.appendChild(btns);
+      return div;
+    }
+
+    // ===== 保存ずみ日記のあとから編集 =====
+    function startEdit(card, en) {
+      if (card.querySelector('.e-edit')) return; // すでに編集中
+      var txDiv = card.querySelector('.e-text');
+      var ta = document.createElement('textarea');
+      ta.className = 'e-edit';
+      ta.value = en.text;
+      txDiv.style.display = 'none';
+      txDiv.parentNode.insertBefore(ta, txDiv.nextSibling);
+
+      var row = document.createElement('div');
+      row.className = 'e-btns';
+      var ok = document.createElement('button');
+      ok.textContent = '💾 これで保存';
+      ok.onclick = function () {
+        var t = ta.value.trim();
+        if (!t) { alert('日記が空っぽです。削除したいときは「🗑 削除」を使ってね'); return; }
+        en.text = t;
+        openDb().then(function (d2) {
+          var t2 = d2.transaction('entries', 'readwrite');
+          t2.objectStore('entries').put(en);
+          t2.oncomplete = loadEntries;
+          t2.onerror = function () { alert('保存に失敗しました'); };
+        });
+      };
+      var ng = document.createElement('button');
+      ng.textContent = '❌ やめる';
+      ng.onclick = loadEntries;
+      row.appendChild(ok);
+      row.appendChild(ng);
+      ta.parentNode.insertBefore(row, ta.nextSibling);
+      ta.focus();
+    }
+
+    // ===== バックアップのリマインド =====
+    function updateBackupWarn(count) {
+      var el = document.getElementById('backupWarn');
+      var msg = '';
+      if (count) {
+        var last = localStorage.getItem('sukusukuLastBackup');
+        if (!last) {
+          if (count >= 3) msg = '⚠️ まだ一度もバックアップを書き出していません。';
+        } else {
+          var days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+          if (days >= 30) msg = '⚠️ 最後のバックアップから' + days + '日たっています。';
+        }
+      }
+      if (msg) {
+        el.textContent = msg + '下の「💾 バックアップを書き出す」を押しておくと、大切な日記を守れます';
+        el.style.display = 'block';
+      } else {
+        el.style.display = 'none';
+      }
     }
 
     // ===== バックアップ（書き出し・読み込み）=====
@@ -739,6 +870,8 @@
             + String(today.getDate()).padStart(2, '0') + '.json';
           a.click();
           URL.revokeObjectURL(a.href);
+          localStorage.setItem('sukusukuLastBackup', new Date().toISOString());
+          updateBackupWarn(0); // 書き出したので警告を消す
           alert('📦 ' + list.length + '件の日記を書き出しました！\nファイルはダウンロードフォルダに入ります。大切に保管してね');
         };
       }).catch(function (err) { alert(err.message); });
@@ -781,6 +914,11 @@
     }
 
     // ===== 起動時 =====
+    // ブラウザに「容量が減ってもこのアプリのデータは消さないで」とお願いする（思い出データの消失対策）
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist();
+    }
+    resetEntryDate();
     updateSubTitle();
     loadEntries();
     if (!geminiKey) { showApiKeyModal(); }
