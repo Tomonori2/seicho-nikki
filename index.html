@@ -670,14 +670,14 @@
               { text: diaryPrompt(dateStr) },
               { inline_data: { mime_type: mime, data: b64 } }
             ] }],
-            generationConfig: { temperature: 0.8, maxOutputTokens: 1024 }
+            generationConfig: { temperature: 0.8, maxOutputTokens: 4096 }
           };
         });
       } else {
         promise = callGemini(function () {
           return {
             contents: [{ parts: [{ text: diaryPrompt(dateStr) }] }],
-            generationConfig: { temperature: 0.8, maxOutputTokens: 1024 }
+            generationConfig: { temperature: 0.8, maxOutputTokens: 4096 }
           };
         });
       }
