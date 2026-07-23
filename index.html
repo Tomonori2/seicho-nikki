@@ -61,9 +61,24 @@
     .btn-rec   { background: linear-gradient(135deg, #ec4899, #be185d); }
     .btn-rec.rec { background: linear-gradient(135deg, #ef4444, #b91c1c); animation: pulse 1.2s infinite; }
     .btn-write { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .btn-rewrite { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
     .btn-save  { background: linear-gradient(135deg, #06b6d4, #3b82f6); }
+    .btn-voice { background: linear-gradient(135deg, #14b8a6, #0d9488); }
+    .btn-voice.playing { animation: pulse 1.2s infinite; }
+    .btn-bgm { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .btn-bgm.playing { animation: pulse 1.2s infinite; }
     .btn-ghost { background: rgba(255,255,255,0.18); font-weight: normal; font-size: 13px; padding: 8px 14px; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    /* 文のふんいき（トーン）選択 */
+    .tone-row { flex-wrap: wrap; }
+    .tone {
+      border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.12);
+      color: #fff; border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .tone:active { transform: scale(0.96); }
+    .tone.on { background: #fff; color: #e8734a; font-weight: bold; border-color: #fff; }
 
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .status { font-size: 13px; color: rgba(255,255,255,0.92); }
@@ -228,8 +243,16 @@
       <input type="date" id="entryDate" class="date-input">
       <span class="status" style="font-size:11px;">書き忘れた日はここを変えてね</span>
     </div>
+    <div class="row tone-row" style="margin-bottom:12px;">
+      <span class="status">🎨 文のふんいき：</span>
+      <button type="button" class="tone" data-tone="ふつう" onclick="setTone(this)">ふつう</button>
+      <button type="button" class="tone" data-tone="やさしく" onclick="setTone(this)">やさしく</button>
+      <button type="button" class="tone" data-tone="たのしく" onclick="setTone(this)">たのしく</button>
+      <button type="button" class="tone" data-tone="みじかく" onclick="setTone(this)">みじかく</button>
+    </div>
     <div class="row">
       <button class="btn btn-write" id="writeBtn" onclick="writeDiary()">✍️ 日記を書いてもらう</button>
+      <button class="btn btn-rewrite" id="rewriteBtn" onclick="writeDiary()" style="display:none;">🔄 別の文で書き直す</button>
       <span class="status" id="writeStatus"></span>
     </div>
     <textarea id="diary" placeholder="ここにAIが書いた日記が出ます。自由に手直ししてから保存してね"></textarea>
@@ -237,12 +260,20 @@
       <button class="btn btn-save" onclick="saveEntry()">💾 この日記を保存</button>
       <button class="btn btn-ghost" onclick="copyDiary()">📋 コピー</button>
     </div>
-    <div class="hint">📌 AIの文はあくまで下書き。表現を直してから保存すると、自分の言葉の日記になります</div>
+    <div class="hint">📌 AIの文はあくまで下書き。気に入らなければ「🔄 別の文で書き直す」で何度でも作り直せます。「文のふんいき」を変えると雰囲気の違う日記になります</div>
   </div>
 
   <!-- 日記一覧 -->
   <div class="card">
     <div class="label">📖 これまでの日記</div>
+    <div class="row" id="voicePlayRow" style="display:none; margin-bottom:4px;">
+      <button class="btn btn-voice" id="voicePlayBtn" onclick="toggleVoiceMemories()">🔊 声の思い出を続けて聞く</button>
+      <span class="status" id="voicePlayStatus">古い順に、子どもの声だけを続けて再生します</span>
+    </div>
+    <div class="row" id="bgmRow" style="margin-bottom:8px;">
+      <button class="btn btn-bgm" id="bgmBtn" onclick="toggleBgm()">🎵 BGMを流す（島の歌）</button>
+      <span class="status" id="bgmStatus">日記を読みながら、そっと音楽を流せます</span>
+    </div>
     <div id="entryList"></div>
     <div class="empty" id="emptyMsg">まだ日記はありません。最初の1ページを書いてみよう！</div>
     <div class="backup-warn" id="backupWarn"></div>
@@ -572,6 +603,29 @@
       document.getElementById('recStatus').textContent = 'その日の声も、日記と一緒にのこせます';
     }
 
+    // ===== 文のふんいき（トーン）=====
+    var diaryTone = localStorage.getItem('sukusukuTone') || 'ふつう';
+    function setTone(btn) {
+      diaryTone = btn.getAttribute('data-tone');
+      localStorage.setItem('sukusukuTone', diaryTone);
+      highlightTone();
+    }
+    function highlightTone() {
+      var btns = document.querySelectorAll('.tone');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('on', btns[i].getAttribute('data-tone') === diaryTone);
+      }
+    }
+    // トーンごとの書き方指示
+    function toneRule() {
+      switch (diaryTone) {
+        case 'やさしく': return '・150〜250字程度。やさしく穏やかで、子どもに語りかけるような、あたたかい文体で。';
+        case 'たのしく': return '・150〜250字程度。明るく元気で、ユーモアたっぷりの楽しい文体で。';
+        case 'みじかく': return '・80〜120字程度で短くまとめる。要点だけを、あたたかく。';
+        default: return '・150〜250字程度。あたたかく、少しユーモアのある自然な文体で。';
+      }
+    }
+
     // ===== 日記を書いてもらう =====
     function diaryPrompt(dateStr) {
       var who = child.name || 'わが子';
@@ -582,7 +636,7 @@
         + '【日付】' + dateStr + '\n'
         + (memo ? '【今日のできごとメモ】\n' + memo + '\n' : '')
         + '【書き方のルール】\n'
-        + '・150〜250字程度。あたたかく、少しユーモアのある自然な文体（です・ます調は使わず、日記らしい常体）。\n'
+        + toneRule() + '（です・ます調は使わず、日記らしい常体）。\n'
         + '・メモや写真に写っていることだけを使う。事実のでっち上げはしない。\n'
         + '・写真がある場合は、写っている様子（表情・しぐさ・場所）を1〜2文で織り込む。\n'
         + '・最後に、成長を感じた一言か、子どもへの短いメッセージで締める。\n'
@@ -631,7 +685,8 @@
       promise
         .then(function (text) {
           document.getElementById('diary').value = text || '';
-          st.textContent = text ? '✅ できたよ！手直しして保存してね' : '😅 うまく書けませんでした';
+          st.textContent = text ? '✅ できたよ！気に入らなければ「🔄 別の文で書き直す」' : '😅 うまく書けませんでした';
+          if (text) document.getElementById('rewriteBtn').style.display = 'inline-block';
         })
         .catch(function (err) { st.textContent = '😅 ' + err.message; })
         .then(function () { btn.disabled = false; });
@@ -682,6 +737,7 @@
           document.getElementById('preview').style.display = 'none';
           document.getElementById('memo').value = '';
           document.getElementById('diary').value = '';
+          document.getElementById('rewriteBtn').style.display = 'none';
           document.getElementById('photoStatus').textContent = '今日の様子を1枚どうぞ';
           document.getElementById('writeStatus').textContent = '📖 保存しました！';
           resetEntryDate();
@@ -704,12 +760,115 @@
       });
     }
 
+    // ===== 声の思い出を続けて聞く（古い順に自動再生）=====
+    // 子どもの声だけを、いちばん古い日から順に流して、成長を耳で振り返れる
+    var voicePlayer = null, voiceQueue = [], voiceIndex = 0;
+
+    function collectVoices() {
+      return new Promise(function (resolve) {
+        openDb().then(function (d) {
+          var req = d.transaction('entries', 'readonly').objectStore('entries').getAll();
+          req.onsuccess = function () {
+            var list = (req.result || []).filter(function (en) { return en.voice; });
+            list.sort(function (a, b) { return a.date.localeCompare(b.date); }); // 古い順
+            resolve(list);
+          };
+          req.onerror = function () { resolve([]); };
+        }).catch(function () { resolve([]); });
+      });
+    }
+
+    function toggleVoiceMemories() {
+      if (voicePlayer) { stopVoiceMemories(); return; }
+      collectVoices().then(function (list) {
+        if (!list.length) {
+          document.getElementById('voicePlayStatus').textContent = 'まだ声の入った日記がありません';
+          return;
+        }
+        if (bgmAudio && !bgmAudio.paused) stopBgm(); // 声を聞くときはBGMを止める
+        voiceQueue = list; voiceIndex = 0;
+        voicePlayer = new Audio();
+        voicePlayer.onended = function () { voiceIndex++; playNextVoice(); };
+        voicePlayer.onerror = function () { voiceIndex++; playNextVoice(); }; // 壊れた声は飛ばす
+        var btn = document.getElementById('voicePlayBtn');
+        btn.textContent = '⏹ 再生を止める';
+        btn.classList.add('playing');
+        playNextVoice();
+      });
+    }
+
+    function playNextVoice() {
+      if (!voicePlayer) return;
+      if (voiceIndex >= voiceQueue.length) {
+        stopVoiceMemories();
+        document.getElementById('voicePlayStatus').textContent = '✅ ぜんぶ聞き終わりました';
+        return;
+      }
+      var en = voiceQueue[voiceIndex];
+      var d = new Date(en.date);
+      var dateStr = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+      document.getElementById('voicePlayStatus').textContent =
+        '▶ ' + dateStr + (en.age ? '（' + en.age + '）' : '') + ' の声（' + (voiceIndex + 1) + '/' + voiceQueue.length + '）';
+      voicePlayer.src = en.voice;
+      voicePlayer.play().catch(function () { voiceIndex++; playNextVoice(); });
+    }
+
+    function stopVoiceMemories() {
+      if (voicePlayer) { voicePlayer.pause(); voicePlayer = null; }
+      var btn = document.getElementById('voicePlayBtn');
+      btn.textContent = '🔊 声の思い出を続けて聞く（' + voiceQueue.length + '件）';
+      btn.classList.remove('playing');
+    }
+
+    // ===== 振り返りBGM（島の歌）=====
+    // 日記を読み返すときに、そっと音楽を流す。声の思い出を聞くときは自動で止める
+    var bgmAudio = null;
+
+    function toggleBgm() {
+      if (bgmAudio && !bgmAudio.paused) { stopBgm(); return; }
+      if (!bgmAudio) {
+        bgmAudio = new Audio('bgm-shima.mp3');
+        bgmAudio.loop = true;
+        bgmAudio.volume = 0.4; // 日記を読む邪魔にならない音量
+        bgmAudio.onerror = function () {
+          document.getElementById('bgmStatus').textContent = '😅 曲を読み込めませんでした';
+        };
+      }
+      if (voicePlayer) stopVoiceMemories(); // 声とBGMがぶつからないように
+      bgmAudio.play().then(function () {
+        document.getElementById('bgmBtn').textContent = '⏸ BGMを止める';
+        document.getElementById('bgmBtn').classList.add('playing');
+        document.getElementById('bgmStatus').textContent = '🎵 島の歌を流しています';
+      }).catch(function () {
+        document.getElementById('bgmStatus').textContent = '😅 再生できませんでした（画面を一度タップしてね）';
+      });
+    }
+
+    function stopBgm() {
+      if (bgmAudio) bgmAudio.pause();
+      document.getElementById('bgmBtn').textContent = '🎵 BGMを流す（島の歌）';
+      document.getElementById('bgmBtn').classList.remove('playing');
+      document.getElementById('bgmStatus').textContent = '日記を読みながら、そっと音楽を流せます';
+    }
+
     function renderEntries(list) {
       var box = document.getElementById('entryList');
       var empty = document.getElementById('emptyMsg');
       box.innerHTML = '';
       empty.style.display = list.length ? 'none' : 'block';
       updateBackupWarn(list.length);
+
+      // 声が入っている日記があれば「声の思い出を続けて聞く」ボタンを出す
+      var voiceCount = list.filter(function (en) { return en.voice; }).length;
+      var vRow = document.getElementById('voicePlayRow');
+      if (voiceCount) {
+        vRow.style.display = 'flex';
+        if (!voicePlayer) {
+          document.getElementById('voicePlayBtn').textContent = '🔊 声の思い出を続けて聞く（' + voiceCount + '件）';
+        }
+      } else {
+        vRow.style.display = 'none';
+      }
 
       // 月ごとにまとめる（新しい月が上・いちばん新しい月だけ開いておく）
       var groups = [], map = {};
@@ -920,6 +1079,7 @@
     }
     resetEntryDate();
     updateSubTitle();
+    highlightTone();
     loadEntries();
     if (!geminiKey) { showApiKeyModal(); }
     else if (!child.name && !child.birth) { showChildModal(); }
