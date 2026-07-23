@@ -395,15 +395,16 @@
             && cand.content.parts[0].text;
           t = (t || '').trim();
           if (t) return t;
-          // 本文が空だったとき、理由を見て分かりやすく伝える
-          var reason = cand && cand.finishReason;
+          // 本文が空だったとき、原因を拾って必ず画面に出す（正体を突き止めるため）
+          var block = d && d.promptFeedback && d.promptFeedback.blockReason;
+          var reason = (cand && cand.finishReason) || block || 'なし（候補が空）';
           if (reason === 'MAX_TOKENS') {
             throw new Error('AIが考えるのに文字数を使い切ったみたい。もう一度「書き直す」を押してね');
           }
-          if (reason === 'SAFETY' || reason === 'RECITATION') {
-            throw new Error('内容の判定でうまく書けませんでした。メモの言葉を少し変えて、もう一度ためしてね');
+          if (reason === 'SAFETY' || reason === 'RECITATION' || block) {
+            throw new Error('AIが内容の判定で書けませんでした（理由：' + reason + '）。メモや写真を変えて、もう一度ためしてね');
           }
-          return ''; // 理由不明のときは従来どおり空扱い
+          throw new Error('日記が空で返ってきました（理由：' + reason + '）。この文言をそのまま教えてね');
         });
       }
       return res.json().catch(function () { return null; }).then(function (d) {
