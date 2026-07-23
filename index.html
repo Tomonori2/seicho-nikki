@@ -337,6 +337,15 @@
         + ':generateContent?key=' + encodeURIComponent(geminiKey);
     }
 
+    // モデルに合わせた生成設定を作る
+    // gemini-2.5系は"思考"に出力トークンを使い切って本文が空で返ることがあるので、
+    // 思考を止めて（thinkingBudget:0）全部を日記の本文に回す。2.0系はこの設定を受け付けないので付けない
+    function genConfig(model) {
+      var cfg = { temperature: 0.8, maxOutputTokens: 4096 };
+      if (/gemini-2\.5/.test(model)) cfg.thinkingConfig = { thinkingBudget: 0 };
+      return cfg;
+    }
+
     // 一時的なエラー（混雑・上限・モデル無し）は次のモデルや再挑戦で対応する
     function isTransient(status) {
       return status === 404 || status === 429 || status === 500 || status === 503;
@@ -357,7 +366,7 @@
           return fetch(modelUrl(model), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bodyFactory())
+            body: JSON.stringify(bodyFactory(model))
           }).then(function (res) {
             if (res.ok) {
               geminiModel = model;
@@ -381,10 +390,20 @@
     function handleGemini(res) {
       if (res.ok) {
         return res.json().then(function (d) {
-          var t = d && d.candidates && d.candidates[0] && d.candidates[0].content
-            && d.candidates[0].content.parts && d.candidates[0].content.parts[0]
-            && d.candidates[0].content.parts[0].text;
-          return (t || '').trim();
+          var cand = d && d.candidates && d.candidates[0];
+          var t = cand && cand.content && cand.content.parts && cand.content.parts[0]
+            && cand.content.parts[0].text;
+          t = (t || '').trim();
+          if (t) return t;
+          // 本文が空だったとき、理由を見て分かりやすく伝える
+          var reason = cand && cand.finishReason;
+          if (reason === 'MAX_TOKENS') {
+            throw new Error('AIが考えるのに文字数を使い切ったみたい。もう一度「書き直す」を押してね');
+          }
+          if (reason === 'SAFETY' || reason === 'RECITATION') {
+            throw new Error('内容の判定でうまく書けませんでした。メモの言葉を少し変えて、もう一度ためしてね');
+          }
+          return ''; // 理由不明のときは従来どおり空扱い
         });
       }
       return res.json().catch(function () { return null; }).then(function (d) {
@@ -664,20 +683,20 @@
       if (usePhoto) {
         var mime = photoData.substring(5, photoData.indexOf(';'));
         var b64 = photoData.substring(photoData.indexOf(',') + 1);
-        promise = callGemini(function () {
+        promise = callGemini(function (model) {
           return {
             contents: [{ parts: [
               { text: diaryPrompt(dateStr) },
               { inline_data: { mime_type: mime, data: b64 } }
             ] }],
-            generationConfig: { temperature: 0.8, maxOutputTokens: 4096 }
+            generationConfig: genConfig(model)
           };
         });
       } else {
-        promise = callGemini(function () {
+        promise = callGemini(function (model) {
           return {
             contents: [{ parts: [{ text: diaryPrompt(dateStr) }] }],
-            generationConfig: { temperature: 0.8, maxOutputTokens: 4096 }
+            generationConfig: genConfig(model)
           };
         });
       }
