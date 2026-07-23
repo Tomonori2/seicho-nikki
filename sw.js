@@ -1,5 +1,5 @@
 // すくすく日記 – サービスワーカー（スマホアプリ化用）
-const CACHE = 'sukusuku-nikki-v9';
+const CACHE = 'sukusuku-nikki-v10';
 const SHELL = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'bgm-shima.mp3'];
 
 // インストール時：画面の部品をキャッシュ
