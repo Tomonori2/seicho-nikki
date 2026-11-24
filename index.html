@@ -285,7 +285,7 @@
     <div class="hint">📌 日記は「この端末のこのブラウザの中」にだけ保存されます。ブラウザのデータを削除すると消えてしまうので、ときどき「バックアップを書き出す」でファイルに保存しておくと安心。別の端末への引っ越しにも使えます</div>
   </div>
 
-  <div style="width:100%; max-width:620px; text-align:center; font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">版：v10</div>
+  <div style="width:100%; max-width:620px; text-align:center; font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">版：v11</div>
 
   <!-- 子どもの設定モーダル -->
   <div class="modal" id="childModal">
@@ -335,8 +335,8 @@
     var geminiModel = localStorage.getItem('geminiModel') || '';
 
     function modelUrl(model) {
-      return 'https://generativelanguage.googleapis.com/v1beta/models/' + model
-        + ':generateContent?key=' + encodeURIComponent(geminiKey);
+      // キーはアドレスに付けず、fetch の見出し（x-goog-api-key）で送る。アドレスは記録に残りやすいため
+      return 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent';
     }
 
     // モデルに合わせた生成設定を作る
@@ -367,7 +367,7 @@
           var model = list[i];
           return fetch(modelUrl(model), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
             body: JSON.stringify(bodyFactory(model))
           }).then(function (res) {
             if (res.ok) {
